@@ -1,0 +1,6 @@
+@docs_ifa_mcp_HostAddress = http://localhost:5210
+
+GET {{docs_ifa_mcp_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
