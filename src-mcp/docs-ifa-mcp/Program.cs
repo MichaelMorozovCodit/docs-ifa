@@ -1,4 +1,5 @@
 using docs_ifa_mcp.Services;
+using ModelContextProtocol.Protocol;
 
 namespace docs_ifa_mcp;
 
@@ -8,24 +9,19 @@ public class Program
     {
         var builder = Host.CreateApplicationBuilder(args);
 
-        // Configure logging to stderr (as per MCP spec)
-        builder.Logging.ClearProviders();
         builder.Logging.AddConsole(consoleLogOptions =>
         {
-            // Configure all logs to go to stderr
             consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;
         });
 
-        // Register documentation services
         builder.Services.AddSingleton<DocumentationIndexService>();
         builder.Services.AddSingleton<QueryService>();
         builder.Services.AddHostedService<DocumentationInitializationService>();
 
-        // Register MCP server with stdio transport and discover tools/prompts/resources from assembly
         builder.Services
             .AddMcpServer(options =>
             {
-                options.ServerInfo = new ModelContextProtocol.Protocol.Implementation
+                options.ServerInfo = new Implementation
                 {
                     Name = "invictus-docs-mcp",
                     Version = "1.0.0"

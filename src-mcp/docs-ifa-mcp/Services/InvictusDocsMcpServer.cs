@@ -11,23 +11,14 @@ namespace docs_ifa_mcp.Services;
 /// </summary>
 [McpServerToolType]
 [McpServerPromptType]
-public class InvictusDocsMcpServer
+public class InvictusDocsMcpServer(
+    DocumentationIndexService indexService,
+    QueryService queryService,
+    ILogger<InvictusDocsMcpServer> logger)
 {
-    private readonly DocumentationIndexService _indexService;
-    private readonly QueryService _queryService;
-    private readonly ILogger<InvictusDocsMcpServer> _logger;
-
-    public InvictusDocsMcpServer(
-        DocumentationIndexService indexService,
-        QueryService queryService,
-        ILogger<InvictusDocsMcpServer> logger)
-    {
-        _indexService = indexService;
-        _queryService = queryService;
-        _logger = logger;
-    }
-
-    // ==================== TOOLS ====================
+    private readonly DocumentationIndexService _indexService = indexService;
+    private readonly QueryService _queryService = queryService;
+    private readonly ILogger<InvictusDocsMcpServer> _logger = logger;
 
     /// <summary>
     /// Search Invictus documentation using semantic search
