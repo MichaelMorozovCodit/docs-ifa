@@ -1,7 +1,6 @@
 ﻿using docs_ifa_mcp.Models;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Configuration;
 
 namespace docs_ifa_mcp.Services
 {
@@ -28,47 +27,71 @@ namespace docs_ifa_mcp.Services
             if (_isInitialized) return;
 
             _logger.LogInformation("Starting documentation indexing...");
+            _logger.LogInformation("Current directory: {CurrentDir}", Directory.GetCurrentDirectory());
 
             // Try configured paths
             var basePath = _configuration["Documentation:BasePath"];
             var fallbackPath = _configuration["Documentation:FallbackPath"];
+
+            _logger.LogInformation("Configured BasePath: {BasePath}", basePath ?? "(not set)");
+            _logger.LogInformation("Configured FallbackPath: {FallbackPath}", fallbackPath ?? "(not set)");
 
             string? docsPath = null;
 
             // Try base path first
             if (!string.IsNullOrEmpty(basePath))
             {
-                var fullBasePath = Path.Combine(Directory.GetCurrentDirectory(), basePath);
+                var fullBasePath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), basePath));
+                _logger.LogInformation("Checking base path: {Path}", fullBasePath);
+                
                 if (Directory.Exists(fullBasePath))
                 {
                     docsPath = fullBasePath;
-                    _logger.LogInformation("Using configured base path: {Path}", docsPath);
+                    _logger.LogInformation("✓ Using configured base path: {Path}", docsPath);
+                }
+                else
+                {
+                    _logger.LogWarning("❌ Configured base path not found: {Path}", fullBasePath);
                 }
             }
 
-            // Try fallback path
-            if (docsPath == null && !string.IsNullOrEmpty(fallbackPath) && Directory.Exists(fallbackPath))
+            // Try fallback path (absolute)
+            if (docsPath == null && !string.IsNullOrEmpty(fallbackPath))
             {
-                docsPath = fallbackPath;
-                _logger.LogInformation("Using fallback path: {Path}", docsPath);
+                _logger.LogInformation("Checking fallback path: {Path}", fallbackPath);
+                
+                if (Directory.Exists(fallbackPath))
+                {
+                    docsPath = fallbackPath;
+                    _logger.LogInformation("✓ Using fallback path: {Path}", docsPath);
+                }
+                else
+                {
+                    _logger.LogWarning("❌ Fallback path not found: {Path}", fallbackPath);
+                }
             }
 
-            // Try some common locations
+            // Try multiple relative paths from current directory
             if (docsPath == null)
             {
-                var commonPaths = new[]
+                var possiblePaths = new[]
                 {
-                    Path.Combine(Directory.GetCurrentDirectory(), "docs"),
-                    Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "docs"),
-                    Path.Combine(Directory.GetCurrentDirectory(), "sample-docs")
+                    Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "versioned_docs", "version-v6.0.0")),
+                    Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "versioned_docs", "version-v6.0.0")),
+                    Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "versioned_docs", "version-v6.0.0")),
+                    Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "versioned_docs", "version-v6.0.0"))
                 };
 
-                foreach (var path in commonPaths)
+                _logger.LogInformation("Trying alternative paths...");
+                
+                foreach (var path in possiblePaths)
                 {
+                    _logger.LogInformation("Checking: {Path}", path);
+                    
                     if (Directory.Exists(path))
                     {
                         docsPath = path;
-                        _logger.LogInformation("Found documentation at: {Path}", docsPath);
+                        _logger.LogInformation("✓ Found documentation at: {Path}", docsPath);
                         break;
                     }
                 }
@@ -77,16 +100,19 @@ namespace docs_ifa_mcp.Services
             if (docsPath != null && Directory.Exists(docsPath))
             {
                 await IndexDirectoryAsync(docsPath);
-                _logger.LogInformation("✓ Successfully indexed {Count} documentation pages", _documents.Count);
+                _logger.LogInformation("✓ Successfully indexed {Count} documentation pages from: {Path}", _documents.Count, docsPath);
                 _isInitialized = true;
             }
             else
             {
-                _logger.LogWarning("⚠ No documentation directory found. Server will start with empty index.");
-                _logger.LogInformation("To add documentation, place .md or .mdx files in one of these locations:");
-                _logger.LogInformation("  - {Path}", Path.Combine(Directory.GetCurrentDirectory(), "sample-docs"));
-                _logger.LogInformation("  - {Path}", basePath ?? "Not configured");
-                _isInitialized = true; // Still mark as initialized
+                _logger.LogError("❌ No documentation directory found!");
+                _logger.LogError("Current working directory: {CurrentDir}", Directory.GetCurrentDirectory());
+                _logger.LogError("Expected one of these paths to exist:");
+                _logger.LogError("  1. {Path}", Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "versioned_docs", "version-v6.0.0")));
+                _logger.LogError("  2. {Path}", Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "versioned_docs", "version-v6.0.0")));
+                _logger.LogError("Please ensure the documentation files are in the correct location.");
+                
+                throw new DirectoryNotFoundException($"Documentation directory not found. Looked in multiple locations starting from: {Directory.GetCurrentDirectory()}");
             }
         }
 

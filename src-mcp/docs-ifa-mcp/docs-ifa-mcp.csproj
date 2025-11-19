@@ -12,8 +12,4 @@
     <PackageReference Include="ModelContextProtocol" Version="*-*" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Controllers\" />
-  </ItemGroup>
-
 </Project>
