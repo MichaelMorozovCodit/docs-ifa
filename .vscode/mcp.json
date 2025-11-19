@@ -1,0 +1,7 @@
+{
+  "servers": {
+    "docs-ifa": {
+      "command": "C:\\Users\\MichaelMorozov\\source\\repos\\docs-ifa-mcp-server\\docs-ifa\\src-mcp\\docs-ifa-mcp\\bin\\Debug\\net10.0\\docs-ifa-mcp.exe"
+    }
+  }
+}

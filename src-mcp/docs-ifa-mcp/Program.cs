@@ -1,71 +1,42 @@
 using docs_ifa_mcp.Services;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Identity.Abstractions;
-using Microsoft.Identity.Web;
-using Microsoft.Identity.Web.Resource;
 
-namespace docs_ifa_mcp
+namespace docs_ifa_mcp;
+
+public class Program
 {
-    public class Program
+    public static async Task Main(string[] args)
     {
-        public static void Main(string[] args)
+        var builder = Host.CreateApplicationBuilder(args);
+
+        // Configure logging to stderr (as per MCP spec)
+        builder.Logging.ClearProviders();
+        builder.Logging.AddConsole(consoleLogOptions =>
         {
-            var builder = WebApplication.CreateBuilder(args);
+            // Configure all logs to go to stderr
+            consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;
+        });
 
-            // Add services
-            builder.Services.AddControllers();
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+        // Register documentation services
+        builder.Services.AddSingleton<DocumentationIndexService>();
+        builder.Services.AddSingleton<QueryService>();
+        builder.Services.AddHostedService<DocumentationInitializationService>();
 
-            // Register MCP services
-            builder.Services.AddSingleton<DocumentationIndexService>();
-            builder.Services.AddSingleton<QueryService>();
-            builder.Services.AddHostedService<DocumentationInitializationService>();
-
-            // Configure CORS for MCP clients
-            builder.Services.AddCors(options =>
+        // Register MCP server with stdio transport and discover tools/prompts/resources from assembly
+        builder.Services
+            .AddMcpServer(options =>
             {
-                options.AddPolicy("AllowMcpClients", policy =>
+                options.ServerInfo = new ModelContextProtocol.Protocol.Implementation
                 {
-                    policy.AllowAnyOrigin()
-                          .AllowAnyMethod()
-                          .AllowAnyHeader();
-                });
-            });
+                    Name = "invictus-docs-mcp",
+                    Version = "1.0.0"
+                };
+            })
+            .WithStdioServerTransport()
+            .WithToolsFromAssembly()
+            .WithPromptsFromAssembly()
+            .WithResourcesFromAssembly();
 
-            // Configure logging
-            builder.Logging.AddConsole();
-            builder.Logging.AddDebug();
-
-            var app = builder.Build();
-
-            // Configure middleware
-            if (app.Environment.IsDevelopment())
-            {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
-
-            app.UseCors("AllowMcpClients");
-            app.UseRouting();
-
-            app.MapControllers();
-
-            // Health check endpoint
-            app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "Invictus MCP Server" }));
-
-            // MCP endpoint discovery
-            string[] capabilities = ["resources/list", "resources/read", "tools/list", "tools/call"];
-            app.MapGet("/", () => Results.Ok(new
-            {
-                name = "Invictus Documentation MCP Server",
-                version = "1.0.0",
-                description = "MCP server for querying Invictus for Azure documentation",
-                capabilities
-            }));
-
-            app.Run();
-        }
+        var app = builder.Build();
+        await app.RunAsync();
     }
 }

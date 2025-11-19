@@ -1,6 +1,7 @@
 ﻿using docs_ifa_mcp.Models;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Configuration;
 
 namespace docs_ifa_mcp.Services
 {
@@ -11,11 +12,15 @@ namespace docs_ifa_mcp.Services
     {
         private readonly ConcurrentDictionary<string, DocumentationPage> _documents = new();
         private readonly ILogger<DocumentationIndexService> _logger;
+        private readonly IConfiguration _configuration;
         private bool _isInitialized;
 
-        public DocumentationIndexService(ILogger<DocumentationIndexService> logger)
+        public DocumentationIndexService(
+            ILogger<DocumentationIndexService> logger,
+            IConfiguration configuration)
         {
             _logger = logger;
+            _configuration = configuration;
         }
 
         public async Task InitializeAsync()
@@ -24,30 +29,72 @@ namespace docs_ifa_mcp.Services
 
             _logger.LogInformation("Starting documentation indexing...");
 
-            var docsPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "versioned_docs", "version-v6.0.0");
+            // Try configured paths
+            var basePath = _configuration["Documentation:BasePath"];
+            var fallbackPath = _configuration["Documentation:FallbackPath"];
 
-            if (!Directory.Exists(docsPath))
+            string? docsPath = null;
+
+            // Try base path first
+            if (!string.IsNullOrEmpty(basePath))
             {
-                _logger.LogWarning("Documentation path not found: {Path}", docsPath);
-                // Fallback to root for containerized environment
-                docsPath = "/app/docs";
+                var fullBasePath = Path.Combine(Directory.GetCurrentDirectory(), basePath);
+                if (Directory.Exists(fullBasePath))
+                {
+                    docsPath = fullBasePath;
+                    _logger.LogInformation("Using configured base path: {Path}", docsPath);
+                }
             }
 
-            if (Directory.Exists(docsPath))
+            // Try fallback path
+            if (docsPath == null && !string.IsNullOrEmpty(fallbackPath) && Directory.Exists(fallbackPath))
+            {
+                docsPath = fallbackPath;
+                _logger.LogInformation("Using fallback path: {Path}", docsPath);
+            }
+
+            // Try some common locations
+            if (docsPath == null)
+            {
+                var commonPaths = new[]
+                {
+                    Path.Combine(Directory.GetCurrentDirectory(), "docs"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "docs"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "sample-docs")
+                };
+
+                foreach (var path in commonPaths)
+                {
+                    if (Directory.Exists(path))
+                    {
+                        docsPath = path;
+                        _logger.LogInformation("Found documentation at: {Path}", docsPath);
+                        break;
+                    }
+                }
+            }
+
+            if (docsPath != null && Directory.Exists(docsPath))
             {
                 await IndexDirectoryAsync(docsPath);
-                _logger.LogInformation("Indexed {Count} documentation pages", _documents.Count);
+                _logger.LogInformation("✓ Successfully indexed {Count} documentation pages", _documents.Count);
                 _isInitialized = true;
             }
             else
             {
-                _logger.LogError("Could not find documentation directory");
+                _logger.LogWarning("⚠ No documentation directory found. Server will start with empty index.");
+                _logger.LogInformation("To add documentation, place .md or .mdx files in one of these locations:");
+                _logger.LogInformation("  - {Path}", Path.Combine(Directory.GetCurrentDirectory(), "sample-docs"));
+                _logger.LogInformation("  - {Path}", basePath ?? "Not configured");
+                _isInitialized = true; // Still mark as initialized
             }
         }
 
         private async Task IndexDirectoryAsync(string path)
         {
             var files = Directory.GetFiles(path, "*.md*", SearchOption.AllDirectories);
+
+            _logger.LogInformation("Found {Count} markdown files to index", files.Length);
 
             foreach (var file in files)
             {
@@ -79,13 +126,14 @@ namespace docs_ifa_mcp.Services
             };
 
             _documents[page.Id] = page;
-            _logger.LogDebug("Indexed: {Title}", page.Title);
+            _logger.LogDebug("Indexed: {Title} ({Id})", page.Title, page.Id);
         }
 
         private string GenerateDocId(string filePath)
         {
-            return Path.GetFileNameWithoutExtension(filePath) + "_" +
-                   Path.GetFileName(Path.GetDirectoryName(filePath));
+            var fileName = Path.GetFileNameWithoutExtension(filePath);
+            var dirName = Path.GetFileName(Path.GetDirectoryName(filePath)) ?? "root";
+            return $"{fileName}_{dirName}".Replace(" ", "_");
         }
 
         private string ExtractTitle(string markdown)
@@ -105,10 +153,14 @@ namespace docs_ifa_mcp.Services
             var cleaned = Regex.Replace(markdown, @"^---.*?---\s*", "", RegexOptions.Singleline);
             cleaned = Regex.Replace(cleaned, @"^#+\s+.*?$", "", RegexOptions.Multiline);
 
-            var firstPara = Regex.Match(cleaned, @"^[^\n]+", RegexOptions.Multiline);
-            return firstPara.Success
-                ? firstPara.Value.Trim().Substring(0, Math.Min(200, firstPara.Value.Length))
-                : "";
+            var firstPara = Regex.Match(cleaned.Trim(), @"^[^\n]+", RegexOptions.Multiline);
+            if (firstPara.Success && firstPara.Value.Length > 0)
+            {
+                var desc = firstPara.Value.Trim();
+                return desc.Length > 200 ? desc.Substring(0, 200) + "..." : desc;
+            }
+
+            return "";
         }
 
         private string CleanMarkdown(string markdown)
@@ -128,7 +180,10 @@ namespace docs_ifa_mcp.Services
             var path = filePath.ToLower();
             if (path.Contains("dashboard")) return "Dashboard";
             if (path.Contains("framework")) return "Framework";
-            if (path.Contains("installation")) return "Installation";
+            if (path.Contains("installation") || path.Contains("install")) return "Installation";
+            if (path.Contains("component")) return "Components";
+            if (path.Contains("tutorial")) return "Tutorials";
+            if (path.Contains("guide")) return "Guides";
             return "General";
         }
 
@@ -139,9 +194,9 @@ namespace docs_ifa_mcp.Services
             // Extract common technical terms
             var patterns = new[]
             {
-            @"\b(Invictus|Dashboard|Framework|Transco|PubSub|Logic App[s]?|Azure|Bicep|Container App[s]?)\b",
-            @"\b(deployment|installation|configuration|authentication)\b"
-        };
+                @"\b(Invictus|Dashboard|Framework|Transco|PubSub|Logic App[s]?|Azure|Bicep|Container App[s]?)\b",
+                @"\b(deployment|installation|configuration|authentication|migration)\b"
+            };
 
             foreach (var pattern in patterns)
             {
