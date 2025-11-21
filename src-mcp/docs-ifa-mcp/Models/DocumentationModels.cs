@@ -8,7 +8,7 @@
         public string Content { get; set; } = "";
         public string Path { get; set; } = "";
         public string Category { get; set; } = "";
-        public List<string> Keywords { get; set; } = new();
+        public List<string> Keywords { get; set; } = [];
     }
 
     public class SearchResult

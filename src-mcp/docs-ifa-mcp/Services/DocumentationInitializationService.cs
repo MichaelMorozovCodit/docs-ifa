@@ -1,17 +1,11 @@
 ﻿namespace docs_ifa_mcp.Services
 {
-    public class DocumentationInitializationService : IHostedService
+    public class DocumentationInitializationService(
+        DocumentationIndexService indexService,
+        ILogger<DocumentationInitializationService> logger) : IHostedService
     {
-        private readonly DocumentationIndexService _indexService;
-        private readonly ILogger<DocumentationInitializationService> _logger;
-
-        public DocumentationInitializationService(
-            DocumentationIndexService indexService,
-            ILogger<DocumentationInitializationService> logger)
-        {
-            _indexService = indexService;
-            _logger = logger;
-        }
+        private readonly DocumentationIndexService _indexService = indexService;
+        private readonly ILogger<DocumentationInitializationService> _logger = logger;
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {

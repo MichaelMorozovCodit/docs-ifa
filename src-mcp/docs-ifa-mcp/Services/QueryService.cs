@@ -23,12 +23,12 @@ namespace docs_ifa_mcp.Services
         {
             _logger.LogInformation("Searching for: {Query}", query);
 
-            await Task.CompletedTask; // For async compatibility
+            await Task.CompletedTask;
 
-            var allDocs = _indexService.GetAllDocuments();
-            var queryTerms = query.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            IEnumerable<DocumentationPage> allDocs = _indexService.GetAllDocuments();
+            string[] queryTerms = query.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-            var results = allDocs
+            List<SearchResult> results = allDocs
                 .Select(doc => new SearchResult
                 {
                     Id = doc.Id,
@@ -50,7 +50,7 @@ namespace docs_ifa_mcp.Services
         private double CalculateRelevanceScore(DocumentationPage doc, string[] queryTerms)
         {
             double score = 0;
-            var content = (doc.Title + " " + doc.Description + " " + doc.Content).ToLower();
+            string content = (doc.Title + " " + doc.Description + " " + doc.Content).ToLower();
 
             foreach (var term in queryTerms)
             {
@@ -81,8 +81,8 @@ namespace docs_ifa_mcp.Services
         private string TruncateContent(string content, string query)
         {
             // Find relevant excerpt around query terms
-            var queryTerms = query.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var contentLower = content.ToLower();
+            string[] queryTerms = query.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            string contentLower = content.ToLower();
 
             foreach (var term in queryTerms)
             {

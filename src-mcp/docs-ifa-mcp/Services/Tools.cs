@@ -1,24 +1,22 @@
-﻿using ModelContextProtocol.Server;
-using ModelContextProtocol.Protocol;
-using System.Text.Json;
+using docs_ifa_mcp.Models;
+using ModelContextProtocol.Server;
 using System.ComponentModel;
 
 namespace docs_ifa_mcp.Services;
 
 /// <summary>
-/// MCP Server for Invictus documentation using the official ModelContextProtocol package
-/// Provides tools, prompts, and resources for querying Invictus for Azure documentation
+/// MCP Tools for Invictus documentation
+/// Provides tools for querying Invictus for Azure documentation
 /// </summary>
 [McpServerToolType]
-[McpServerPromptType]
-public class InvictusDocsMcpServer(
+public class Tools(
     DocumentationIndexService indexService,
     QueryService queryService,
-    ILogger<InvictusDocsMcpServer> logger)
+    ILogger<Tools> logger)
 {
     private readonly DocumentationIndexService _indexService = indexService;
     private readonly QueryService _queryService = queryService;
-    private readonly ILogger<InvictusDocsMcpServer> _logger = logger;
+    private readonly ILogger<Tools> _logger = logger;
 
     /// <summary>
     /// Search Invictus documentation using semantic search
@@ -56,7 +54,7 @@ public class InvictusDocsMcpServer(
         [Description("Specific step: 'prerequisites', 'build', 'release', or 'all'")] string? step = null,
         CancellationToken cancellationToken = default)
     {
-        var searchQuery = component.ToLower() switch
+        string searchQuery = component.ToLower() switch
         {
             "dashboard" => $"Installing Invictus Dashboard {step ?? "all"}",
             "framework" => $"Installing Invictus Framework {step ?? "all"}",
@@ -64,9 +62,9 @@ public class InvictusDocsMcpServer(
             _ => "Installing Invictus"
         };
 
-        var results = await _queryService.SearchAsync(searchQuery, 5);
+        List<SearchResult> results = await _queryService.SearchAsync(searchQuery, 5);
         
-        if (!results.Any())
+        if (results.Count == 0)
             return $"No installation guide found for {component}.";
 
         return $"# Installation Guide: {component.ToUpper()}\n\n" +
@@ -142,83 +140,5 @@ public class InvictusDocsMcpServer(
 
         result += $"\n**Total documents:** {documents.Count()}";
         return result;
-    }
-
-    // ==================== PROMPTS ====================
-
-    /// <summary>
-    /// Creates a prompt for asking about Invictus installation
-    /// </summary>
-    [McpServerPrompt(Name = "installation_help")]
-    [Description("Get help with Invictus installation")]
-    public static GetPromptResult GetInstallationPrompt(
-        [Description("Component: 'dashboard' or 'framework'")] string component = "framework")
-    {
-        return new GetPromptResult
-        {
-            Messages =
-            [
-                new PromptMessage
-                {
-                    Role = Role.User,
-                    Content = new TextContentBlock
-                    {
-                        Text = $"I need help installing Invictus {component}. " +
-                               "Guide me through prerequisites, build pipeline, and release pipeline with examples."
-                    }
-                }
-            ]
-        };
-    }
-
-    /// <summary>
-    /// Creates a prompt for troubleshooting Invictus issues
-    /// </summary>
-    [McpServerPrompt(Name = "troubleshooting_help")]
-    [Description("Get help troubleshooting Invictus issues")]
-    public static GetPromptResult GetTroubleshootingPrompt(
-        [Description("Component having issues")] string component,
-        [Description("Problem description")] string problem)
-    {
-        return new GetPromptResult
-        {
-            Messages =
-            [
-                new PromptMessage
-                {
-                    Role = Role.User,
-                    Content = new TextContentBlock
-                    {
-                        Text = $"Issue with Invictus {component}: {problem}. " +
-                               "Help diagnose and resolve. Check docs for solutions and best practices."
-                    }
-                }
-            ]
-        };
-    }
-
-    /// <summary>
-    /// Creates a prompt for component configuration help
-    /// </summary>
-    [McpServerPrompt(Name = "component_config_help")]
-    [Description("Get help configuring an Invictus component")]
-    public static GetPromptResult GetComponentConfigPrompt(
-        [Description("Component name")] string component)
-    {
-        return new GetPromptResult
-        {
-            Messages =
-            [
-                new PromptMessage
-                {
-                    Role = Role.User,
-                    Content = new TextContentBlock
-                    {
-                        Text = $"Show me how to configure {component} in Invictus. " +
-                               "Include parameters, examples, and best practices."
-                    }
-                }
-            ]
-        };
     }
 }
